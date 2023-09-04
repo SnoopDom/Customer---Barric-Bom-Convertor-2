@@ -1,16 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Data;
-using System.Drawing;
+using System.IO;
 using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using System.Windows.Forms;
-using Syncfusion.XlsIO;
-
-
+using OfficeOpenXml;
+using OfficeOpenXml.Style;
 
 namespace Customer___Barric_Bom_Convertor
 {
@@ -24,29 +20,24 @@ namespace Customer___Barric_Bom_Convertor
 
         private void PopulateComboBoxFromExcel(string filePath)
         {
-            // Load the Excel file
-            using (ExcelEngine excelEngine = new ExcelEngine())
-            {
-                IApplication application = excelEngine.Excel;
-                IWorkbook workbook = application.Workbooks.Open(filePath);
-                IWorksheet worksheet = workbook.Worksheets[0]; // Assuming data is in the first worksheet
+            // If you use EPPlus in a noncommercial context
+            // according to the Polyform Noncommercial license:
+            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
 
-                // Read data from the first row (row 1) to populate the combo box
-                int rowNumber = 0; // First row
-                IRange dataRange = worksheet.Rows[rowNumber];
+            using (var package = new ExcelPackage(new FileInfo(filePath)))
+            {
+                var worksheet = package.Workbook.Worksheets[0]; // Assuming data is in the first worksheet
+
                 List<string> comboItems = new List<string>();
 
-                foreach (var cell in dataRange)
+                foreach (var cell in worksheet.Cells[1, 1, 1, worksheet.Dimension.End.Column])
                 {
-                    comboItems.Add(cell.DisplayText);
+                    comboItems.Add(cell.Text);
                 }
 
                 // Populate the combo box with the extracted data
                 DataGridViewComboBoxColumn comboBoxColumn = (DataGridViewComboBoxColumn)dataGridView.Columns["dataGridViewComboBoxColumn"];
                 comboBoxColumn.Items.AddRange(comboItems.ToArray());
-
-                // Close the Excel file
-                workbook.Close();
             }
         }
 
@@ -59,10 +50,6 @@ namespace Customer___Barric_Bom_Convertor
             {
                 // Get the selected file path and display it in the filePathTextBox
                 bomFilePath.Text = openFileDialog.FileName;
-
-                // You can also perform further operations with the selected file if needed
-                // For example, you can load and process the Excel file using Syncfusion XlsIO
-                // For simplicity, this code only sets the file path in the TextBox.
             }
         }
 
@@ -85,19 +72,15 @@ namespace Customer___Barric_Bom_Convertor
 
         private void dataGridView_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
-            // Check if the clicked cell is in the "Delete Row" column
             if (e.ColumnIndex == dataGridView.Columns["btnDeleteRowColumn"].Index && e.RowIndex >= 0)
             {
-                // Check if a value is selected in the ComboBoxColumn
                 DataGridViewComboBoxCell comboBoxCell = dataGridView.Rows[e.RowIndex].Cells["dataGridViewComboBoxColumn"] as DataGridViewComboBoxCell;
                 if (comboBoxCell != null && comboBoxCell.Value != null && !string.IsNullOrEmpty(comboBoxCell.Value.ToString()))
                 {
-                    // Delete the row corresponding to the clicked cell
                     dataGridView.Rows.RemoveAt(e.RowIndex);
                 }
                 else
                 {
-                    // Display an error message
                     MessageBox.Show("Please select a search criteria before deleting.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
@@ -105,58 +88,128 @@ namespace Customer___Barric_Bom_Convertor
 
         private void btnProcessData_Click(object sender, EventArgs e)
         {
-            // Check if there is a selected row
             if (dataGridView.CurrentRow == null)
             {
                 MessageBox.Show("Please select a row before processing.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
-            // Get the selected search criteria and cell range
-            string criteria = dataGridView.CurrentRow.Cells["dataGridViewComboBoxColumn"].Value?.ToString();
             string cellRange = dataGridView.CurrentRow.Cells["enterCellDataColumn"].Value?.ToString();
 
-            // Check if criteria or cellRange is null or empty
-            if (string.IsNullOrEmpty(criteria) || string.IsNullOrEmpty(cellRange))
+            if (string.IsNullOrEmpty(cellRange))
             {
-                MessageBox.Show("Please fill in both search criteria and cell range.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Please fill in the cell range.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
-
-            // Load the source Excel file
-            using (ExcelEngine excelEngine = new ExcelEngine())
+            // Get the selected headers from the DataGridViewComboBoxColumn
+            List<string> selectedHeaders = new List<string>();
+            foreach (DataGridViewRow row in dataGridView.Rows)
             {
-                IApplication application = excelEngine.Excel;
-                IWorkbook sourceWorkbook = application.Workbooks.Open(bomFilePath.Text);
-                IWorksheet sourceWorksheet = sourceWorkbook.Worksheets[0];
-
-                // Create a new Excel workbook
-                IWorkbook newWorkbook = application.Workbooks.Create();
-                IWorksheet newWorksheet = newWorkbook.Worksheets[0];
-
-                // Get the data from the specified cell range
-                IRange bomDataRange = sourceWorksheet.Range[cellRange];
-
-                // Set the data in the new workbook
-                for (int i = 0; i < bomDataRange.Text.Split(new[] { "\n" }, StringSplitOptions.RemoveEmptyEntries).Length; i++)
+                DataGridViewComboBoxCell comboBoxCell = row.Cells["dataGridViewComboBoxColumn"] as DataGridViewComboBoxCell;
+                if (comboBoxCell != null && comboBoxCell.Value != null && !string.IsNullOrEmpty(comboBoxCell.Value.ToString()))
                 {
-                    newWorksheet.SetValue(i + 1, 1, bomDataRange.Text.Split(new[] { "\n" }, StringSplitOptions.RemoveEmptyEntries)[i]);
+                    selectedHeaders.Add(comboBoxCell.Value.ToString());
                 }
+            }
 
-                //Save the new workbooks
-                SaveFileDialog saveFileDialog = new SaveFileDialog();
-                saveFileDialog.Filter = "Excel Files|*.xlsx";
-                if (saveFileDialog.ShowDialog() == DialogResult.OK)
+            if (selectedHeaders.Count == 0)
+            {
+                MessageBox.Show("Please select at least one header.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            using (var package = new ExcelPackage(new FileInfo(bomFilePath.Text)))
+            {
+                var sourceWorksheet = package.Workbook.Worksheets[0];
+
+                using (var newPackage = new ExcelPackage())
                 {
-                    newWorkbook.SaveAs(saveFileDialog.FileName);
+                    var newWorksheet = newPackage.Workbook.Worksheets.Add("Sheet1");
+
+                    // Format the header row
+                    for (int i = 0; i < selectedHeaders.Count; i++)
+                    {
+                        newWorksheet.Cells[1, i + 1].Value = selectedHeaders[i];
+                    }
+
+                    // Get the data from the specified cell range
+                    var bomDataRange = sourceWorksheet.Cells[cellRange];
+
+                    int rowNum = 2; // Start from the second row (after headers)
+                    foreach (var cell in bomDataRange)
+                    {
+                        int columnNum = cell.Start.Column;
+                        string header = newWorksheet.Cells[1, columnNum]?.Value?.ToString();
+
+                        if (selectedHeaders.Contains(header))
+                        {
+                            newWorksheet.Cells[rowNum, selectedHeaders.IndexOf(header) + 1].Value = cell.Text;
+                        }
+                    }
+
+                    // AutoFit columns
+                    newWorksheet.Cells.AutoFitColumns();
+
+                    SaveFileDialog saveFileDialog = new SaveFileDialog();
+                    saveFileDialog.Filter = "Excel Files|*.xlsx";
+                    if (saveFileDialog.ShowDialog() == DialogResult.OK)
+                    {
+                        newPackage.SaveAs(new FileInfo(saveFileDialog.FileName));
+                    }
+
+                    MessageBox.Show("Data processing and formatting completed successfully.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
+            }
+        }
 
-                // Close workbooks
-                newWorkbook.Close();
-                sourceWorkbook.Close();
-                MessageBox.Show("Data processing completed successfully.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
+        private void ProcessData(string cellRange, List<string> selectedHeaders)
+        {
+            using (var package = new ExcelPackage(new FileInfo(bomFilePath.Text)))
+            {
+                var sourceWorksheet = package.Workbook.Worksheets[0];
+
+                using (var newPackage = new ExcelPackage())
+                {
+                    var newWorksheet = newPackage.Workbook.Worksheets.Add("Sheet1");
+
+                    // Add selected headers to row 1
+                    int headerColumn = 1;
+                    foreach (var header in selectedHeaders)
+                    {
+                        newWorksheet.Cells[1, headerColumn].Value = header;
+                        headerColumn++;
+                    }
+
+                    // Get the data from the specified cell range
+                    var bomDataRange = sourceWorksheet.Cells[cellRange];
+
+                    int rowNum = 2; // Start from the second row
+                    foreach (var cell in bomDataRange)
+                    {
+                        int columnNum = cell.Start.Column;
+                        string header = newWorksheet.Cells[1, columnNum]?.Value?.ToString();
+
+                        if (selectedHeaders.Contains(header))
+                        {
+                            newWorksheet.Cells[rowNum, columnNum].Value = cell.Text;
+                        }
+                    }
+
+                    // Save the data to a new Excel file
+                    SaveFileDialog saveFileDialog = new SaveFileDialog();
+                    saveFileDialog.Filter = "Excel Files|*.xlsx";
+                    if (saveFileDialog.ShowDialog() == DialogResult.OK)
+                    {
+                        newPackage.SaveAs(new FileInfo(saveFileDialog.FileName));
+                        MessageBox.Show("Data processing completed successfully.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    else
+                    {
+                        MessageBox.Show("Data processing canceled.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                }
             }
         }
     }
