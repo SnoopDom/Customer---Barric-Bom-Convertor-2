@@ -12,6 +12,7 @@ namespace Customer___Barric_Bom_Convertor
 {
     public partial class Form1 : Form
     {
+        private Dictionary<string, string> headerToDataRange = new Dictionary<string, string>();
 
         public Form1()
         {
@@ -103,17 +104,17 @@ namespace Customer___Barric_Bom_Convertor
             }
 
             // Get the selected headers from the DataGridViewComboBoxColumn
-            List<string> selectedHeaders = new List<string>();
+            headerToDataRange.Clear();
             foreach (DataGridViewRow row in dataGridView.Rows)
             {
                 DataGridViewComboBoxCell comboBoxCell = row.Cells["dataGridViewComboBoxColumn"] as DataGridViewComboBoxCell;
                 if (comboBoxCell != null && comboBoxCell.Value != null && !string.IsNullOrEmpty(comboBoxCell.Value.ToString()))
                 {
-                    selectedHeaders.Add(comboBoxCell.Value.ToString());
+                    headerToDataRange[comboBoxCell.Value.ToString()] = row.Cells["enterCellDataColumn"].Value?.ToString();
                 }
             }
 
-            if (selectedHeaders.Count == 0)
+            if (headerToDataRange.Count == 0)
             {
                 MessageBox.Show("Please select at least one header.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
@@ -128,23 +129,21 @@ namespace Customer___Barric_Bom_Convertor
                     var newWorksheet = newPackage.Workbook.Worksheets.Add("Sheet1");
 
                     // Format the header row
-                    for (int i = 0; i < selectedHeaders.Count; i++)
+                    foreach (var kvp in headerToDataRange)
                     {
-                        newWorksheet.Cells[1, i + 1].Value = selectedHeaders[i];
+                        newWorksheet.Cells[1, headerToDataRange.Keys.ToList().IndexOf(kvp.Key) + 1].Value = kvp.Key;
                     }
 
                     // Get the data from the specified cell range
-                    var bomDataRange = sourceWorksheet.Cells[cellRange];
-
-                    int rowNum = 2; // Start from the second row (after headers)
-                    foreach (var cell in bomDataRange)
+                    foreach (var kvp in headerToDataRange)
                     {
-                        int columnNum = cell.Start.Column;
-                        string header = newWorksheet.Cells[1, columnNum]?.Value?.ToString();
+                        var bomDataRange = sourceWorksheet.Cells[kvp.Value];
+                        int rowNum = 2; // Start from the second row (after headers)
 
-                        if (selectedHeaders.Contains(header))
+                        foreach (var cell in bomDataRange)
                         {
-                            newWorksheet.Cells[rowNum, selectedHeaders.IndexOf(header) + 1].Value = cell.Text;
+                            newWorksheet.Cells[rowNum, headerToDataRange.Keys.ToList().IndexOf(kvp.Key) + 1].Value = cell.Text;
+                            rowNum++;
                         }
                     }
 
@@ -159,56 +158,6 @@ namespace Customer___Barric_Bom_Convertor
                     }
 
                     MessageBox.Show("Data processing and formatting completed successfully.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-            }
-        }
-
-
-        private void ProcessData(string cellRange, List<string> selectedHeaders)
-        {
-            using (var package = new ExcelPackage(new FileInfo(bomFilePath.Text)))
-            {
-                var sourceWorksheet = package.Workbook.Worksheets[0];
-
-                using (var newPackage = new ExcelPackage())
-                {
-                    var newWorksheet = newPackage.Workbook.Worksheets.Add("Sheet1");
-
-                    // Add selected headers to row 1
-                    int headerColumn = 1;
-                    foreach (var header in selectedHeaders)
-                    {
-                        newWorksheet.Cells[1, headerColumn].Value = header;
-                        headerColumn++;
-                    }
-
-                    // Get the data from the specified cell range
-                    var bomDataRange = sourceWorksheet.Cells[cellRange];
-
-                    int rowNum = 2; // Start from the second row
-                    foreach (var cell in bomDataRange)
-                    {
-                        int columnNum = cell.Start.Column;
-                        string header = newWorksheet.Cells[1, columnNum]?.Value?.ToString();
-
-                        if (selectedHeaders.Contains(header))
-                        {
-                            newWorksheet.Cells[rowNum, columnNum].Value = cell.Text;
-                        }
-                    }
-
-                    // Save the data to a new Excel file
-                    SaveFileDialog saveFileDialog = new SaveFileDialog();
-                    saveFileDialog.Filter = "Excel Files|*.xlsx";
-                    if (saveFileDialog.ShowDialog() == DialogResult.OK)
-                    {
-                        newPackage.SaveAs(new FileInfo(saveFileDialog.FileName));
-                        MessageBox.Show("Data processing completed successfully.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    }
-                    else
-                    {
-                        MessageBox.Show("Data processing canceled.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    }
                 }
             }
         }

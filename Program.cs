@@ -18,8 +18,6 @@ namespace Customer___Barric_Bom_Convertor
         [STAThread]
         static void Main()
         {
-            // Set the Syncfusion trial license key
-            SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQxAR8/V1NGaF1cWGhAYVJ2WmFZfV1gcF9CZlZSRmY/P1ZhSXxQdkxjWn5YdHJWRGFaVkY=");
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new Form1());
