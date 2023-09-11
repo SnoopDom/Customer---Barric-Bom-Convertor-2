@@ -21,16 +21,17 @@ namespace Customer___Barric_Bom_Convertor
 
         private void PopulateComboBoxFromExcel(string filePath)
         {
-            // If you use EPPlus in a noncommercial context
-            // according to the Polyform Noncommercial license:
+            // Set EPPlus license context to non-commercial
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
 
+            // Load the selected Excel file
             using (var package = new ExcelPackage(new FileInfo(filePath)))
             {
                 var worksheet = package.Workbook.Worksheets[0]; // Assuming data is in the first worksheet
 
                 List<string> comboItems = new List<string>();
 
+                // Extract header row data from the worksheet
                 foreach (var cell in worksheet.Cells[1, 1, 1, worksheet.Dimension.End.Column])
                 {
                     comboItems.Add(cell.Text);
@@ -78,6 +79,7 @@ namespace Customer___Barric_Bom_Convertor
                 DataGridViewComboBoxCell comboBoxCell = dataGridView.Rows[e.RowIndex].Cells["dataGridViewComboBoxColumn"] as DataGridViewComboBoxCell;
                 if (comboBoxCell != null && comboBoxCell.Value != null && !string.IsNullOrEmpty(comboBoxCell.Value.ToString()))
                 {
+                    // Remove the selected row if a search criteria is selected
                     dataGridView.Rows.RemoveAt(e.RowIndex);
                 }
                 else
@@ -110,6 +112,7 @@ namespace Customer___Barric_Bom_Convertor
                 DataGridViewComboBoxCell comboBoxCell = row.Cells["dataGridViewComboBoxColumn"] as DataGridViewComboBoxCell;
                 if (comboBoxCell != null && comboBoxCell.Value != null && !string.IsNullOrEmpty(comboBoxCell.Value.ToString()))
                 {
+                    // Store the mapping of header to data range
                     headerToDataRange[comboBoxCell.Value.ToString()] = row.Cells["enterCellDataColumn"].Value?.ToString();
                 }
             }
@@ -128,13 +131,13 @@ namespace Customer___Barric_Bom_Convertor
                 {
                     var newWorksheet = newPackage.Workbook.Worksheets.Add("Sheet1");
 
-                    // Format the header row
+                    // Format the header row in the new worksheet
                     foreach (var kvp in headerToDataRange)
                     {
                         newWorksheet.Cells[1, headerToDataRange.Keys.ToList().IndexOf(kvp.Key) + 1].Value = kvp.Key;
                     }
 
-                    // Get the data from the specified cell range
+                    // Get the data from the specified cell range and populate the new worksheet
                     foreach (var kvp in headerToDataRange)
                     {
                         var bomDataRange = sourceWorksheet.Cells[kvp.Value];
@@ -147,9 +150,10 @@ namespace Customer___Barric_Bom_Convertor
                         }
                     }
 
-                    // AutoFit columns
+                    // AutoFit columns in the new worksheet
                     newWorksheet.Cells.AutoFitColumns();
 
+                    // Save the new Excel file
                     SaveFileDialog saveFileDialog = new SaveFileDialog();
                     saveFileDialog.Filter = "Excel Files|*.xlsx";
                     if (saveFileDialog.ShowDialog() == DialogResult.OK)
