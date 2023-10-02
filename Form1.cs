@@ -7,6 +7,8 @@ using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using OfficeOpenXml;
 using OfficeOpenXml.Style;
+using FuzzyStrings;
+
 
 namespace Customer___Barric_Bom_Convertor
 {
@@ -88,6 +90,11 @@ namespace Customer___Barric_Bom_Convertor
                 }
             }
         }
+        private bool IsExactMatch(string bomValue, string inventoryValue)
+        {
+            // Compare the values case-insensitively for an exact match
+            return string.Equals(bomValue, inventoryValue, StringComparison.OrdinalIgnoreCase);
+        }
 
         private void btnProcessData_Click(object sender, EventArgs e)
         {
@@ -158,28 +165,37 @@ namespace Customer___Barric_Bom_Convertor
                         {
                             var sourceWorksheet = sourcePackage.Workbook.Worksheets[0]; // Assuming data is in the first worksheet
 
-                            // Add selected headers to the existing worksheet
-                            foreach (var kvp in headerToDataRange)
-                            {
-                                // Copy headers from the source worksheet to the existing worksheet
-                                existingWorksheet.Cells[1, headerToDataRange.Keys.ToList().IndexOf(kvp.Key) + 1].Value = kvp.Key;
-                            }
+                            // Create a new "Comparison" sheet
+                            var comparisonWorksheet = existingPackage.Workbook.Worksheets.Add("Comparison");
 
-                            // Get the data from the specified cell range and populate the new worksheet
+                            // Header row for the "Comparison" sheet
+                            comparisonWorksheet.Cells[1, 1].Value = "Part Number";
+                            // Add other headers as needed
+
+                            int comparisonRow = 2; // Start from the second row
+
+                            // Iterate through the source data and perform comparison
                             foreach (var kvp in headerToDataRange)
                             {
                                 var bomDataRange = sourceWorksheet.Cells[kvp.Value];
-                                int rowNum = 2; // Start from the second row (after headers)
-
                                 foreach (var cell in bomDataRange)
                                 {
-                                    existingWorksheet.Cells[rowNum, headerToDataRange.Keys.ToList().IndexOf(kvp.Key) + 1].Value = cell.Text;
-                                    rowNum++;
+                                    string bomValue = cell.Text;
+
+                                    // Placeholder for your comparison condition
+                                    // Replace this with your actual comparison logic
+                                    if (IsExactMatch(bomValue, inventoryValue))
+                                    {
+                                        // If it's an exact match, add it to the "Comparison" sheet
+                                        comparisonWorksheet.Cells[comparisonRow, 1].Value = bomValue;
+                                        // Populate other columns as needed
+                                        comparisonRow++;
+                                    }
                                 }
                             }
 
-                            // AutoFit columns in the existing worksheet
-                            existingWorksheet.Cells.AutoFitColumns();
+                            // AutoFit columns in the "Comparison" sheet
+                            comparisonWorksheet.Cells.AutoFitColumns();
 
                             // Save the existing Excel file with the added data and selected headers
                             existingPackage.Save();
@@ -196,10 +212,10 @@ namespace Customer___Barric_Bom_Convertor
                 {
                     MessageBox.Show($"An error occurred while processing and appending the data: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
-
-
             }
         }
+
+
 
     }
 }
