@@ -123,47 +123,83 @@ namespace Customer___Barric_Bom_Convertor
                 return;
             }
 
-            using (var package = new ExcelPackage(new FileInfo(bomFilePath.Text)))
+            // Open the existing Excel file using a file dialog
+            OpenFileDialog openFileDialog = new OpenFileDialog();
+            openFileDialog.Filter = "Excel Files|*.xlsx";
+            openFileDialog.Title = "Select an existing Excel file to append data";
+
+            if (openFileDialog.ShowDialog() == DialogResult.OK)
             {
-                var sourceWorksheet = package.Workbook.Worksheets[0];
+                string existingFilePath = openFileDialog.FileName;
 
-                using (var newPackage = new ExcelPackage())
+                try
                 {
-                    var newWorksheet = newPackage.Workbook.Worksheets.Add("Sheet1");
-
-                    // Format the header row in the new worksheet
-                    foreach (var kvp in headerToDataRange)
+                    using (var existingPackage = new ExcelPackage(new FileInfo(existingFilePath)))
                     {
-                        newWorksheet.Cells[1, headerToDataRange.Keys.ToList().IndexOf(kvp.Key) + 1].Value = kvp.Key;
-                    }
+                        var existingWorksheet = existingPackage.Workbook.Worksheets.FirstOrDefault(sheet => sheet.Name == "Customer BOM Information");
 
-                    // Get the data from the specified cell range and populate the new worksheet
-                    foreach (var kvp in headerToDataRange)
-                    {
-                        var bomDataRange = sourceWorksheet.Cells[kvp.Value];
-                        int rowNum = 2; // Start from the second row (after headers)
-
-                        foreach (var cell in bomDataRange)
+                        if (existingWorksheet == null)
                         {
-                            newWorksheet.Cells[rowNum, headerToDataRange.Keys.ToList().IndexOf(kvp.Key) + 1].Value = cell.Text;
-                            rowNum++;
+                            // Create a new worksheet if it doesn't exist
+                            existingWorksheet = existingPackage.Workbook.Worksheets.Add("Customer BOM Information");
                         }
+                        else
+                        {
+                            // Clear only the data (not headers) in the "Customer BOM Information" sheet
+                            var rowsWithData = existingWorksheet.Cells["2:1048576"].Where(cell => !string.IsNullOrEmpty(cell.Text));
+                            foreach (var cell in rowsWithData)
+                            {
+                                cell.Clear();
+                            }
+                        }
+
+                        // Load the source Excel file
+                        using (var sourcePackage = new ExcelPackage(new FileInfo(bomFilePath.Text))) // Load the source Excel file
+                        {
+                            var sourceWorksheet = sourcePackage.Workbook.Worksheets[0]; // Assuming data is in the first worksheet
+
+                            // Add selected headers to the existing worksheet
+                            foreach (var kvp in headerToDataRange)
+                            {
+                                // Copy headers from the source worksheet to the existing worksheet
+                                existingWorksheet.Cells[1, headerToDataRange.Keys.ToList().IndexOf(kvp.Key) + 1].Value = kvp.Key;
+                            }
+
+                            // Get the data from the specified cell range and populate the new worksheet
+                            foreach (var kvp in headerToDataRange)
+                            {
+                                var bomDataRange = sourceWorksheet.Cells[kvp.Value];
+                                int rowNum = 2; // Start from the second row (after headers)
+
+                                foreach (var cell in bomDataRange)
+                                {
+                                    existingWorksheet.Cells[rowNum, headerToDataRange.Keys.ToList().IndexOf(kvp.Key) + 1].Value = cell.Text;
+                                    rowNum++;
+                                }
+                            }
+
+                            // AutoFit columns in the existing worksheet
+                            existingWorksheet.Cells.AutoFitColumns();
+
+                            // Save the existing Excel file with the added data and selected headers
+                            existingPackage.Save();
+                        }
+
+                        MessageBox.Show("Data processing and appending completed successfully.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
-
-                    // AutoFit columns in the new worksheet
-                    newWorksheet.Cells.AutoFitColumns();
-
-                    // Save the new Excel file
-                    SaveFileDialog saveFileDialog = new SaveFileDialog();
-                    saveFileDialog.Filter = "Excel Files|*.xlsx";
-                    if (saveFileDialog.ShowDialog() == DialogResult.OK)
-                    {
-                        newPackage.SaveAs(new FileInfo(saveFileDialog.FileName));
-                    }
-
-                    MessageBox.Show("Data processing and formatting completed successfully.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
+                catch (IOException ex)
+                {
+                    MessageBox.Show($"Error accessing the Excel files. Please make sure the files are not open in another application.\nDetails: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"An error occurred while processing and appending the data: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+
+
             }
         }
+
     }
 }
