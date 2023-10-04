@@ -145,7 +145,7 @@ namespace Customer___Barric_Bom_Convertor
                         }
                         else
                         {
-                            // Clear only the data (not headers) in the "Customer BOM Information" sheet
+                            // Clear all the data in the "Customer BOM Information" sheet
                             var rowsWithData = existingWorksheet.Cells["2:1048576"].Where(cell => !string.IsNullOrEmpty(cell.Text));
                             foreach (var cell in rowsWithData)
                             {
@@ -183,6 +183,15 @@ namespace Customer___Barric_Bom_Convertor
 
                             // Save the existing Excel file with the added data and selected headers
                             existingPackage.Save();
+
+                            // Add the "Inferred Data" sheet if it doesnt exist, clear it if it does.
+                            var inferredDataWorksheet = existingPackage.Workbook.Worksheets.FirstOrDefault(sheet => sheet.Name == "Inferred Data");
+                            if (inferredDataWorksheet == null)
+                            {
+                                inferredDataWorksheet = existingPackage.Workbook.Worksheets.Add("Inferred Data");
+                                existingPackage.Save(); // Save the package after adding the sheet
+                            }
+
                         }
 
                         MessageBox.Show("Data processing and appending completed successfully.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -196,10 +205,9 @@ namespace Customer___Barric_Bom_Convertor
                 {
                     MessageBox.Show($"An error occurred while processing and appending the data: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
-
-
             }
         }
+
 
     }
 }
