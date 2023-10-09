@@ -21,7 +21,7 @@ namespace Customer___Barric_Bom_Convertor
 
         private void PopulateComboBoxFromExcel(string filePath)
         {
-            // Set EPPlus license context to non-commercial
+            // Set the licensing context for EPPlus to non-commercial
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
 
             // Load the selected Excel file
@@ -154,7 +154,7 @@ namespace Customer___Barric_Bom_Convertor
                         }
 
                         // Load the source Excel file
-                        using (var sourcePackage = new ExcelPackage(new FileInfo(bomFilePath.Text))) // Load the source Excel file
+                        using (var sourcePackage = new ExcelPackage(new FileInfo(bomFilePath.Text)))
                         {
                             var sourceWorksheet = sourcePackage.Workbook.Worksheets[0]; // Assuming data is in the first worksheet
 
@@ -184,17 +184,78 @@ namespace Customer___Barric_Bom_Convertor
                             // Save the existing Excel file with the added data and selected headers
                             existingPackage.Save();
 
-                            // Add the "Inferred Data" sheet if it doesnt exist, clear it if it does.
-                            var inferredDataWorksheet = existingPackage.Workbook.Worksheets.FirstOrDefault(sheet => sheet.Name == "Inferred Data");
-                            if (inferredDataWorksheet == null)
+                            // After processing and appending data, search for matches in the "Stock" sheet
+                            var stockWorksheet = existingPackage.Workbook.Worksheets.FirstOrDefault(sheet => sheet.Name == "Stock");
+                            if (stockWorksheet != null)
                             {
-                                inferredDataWorksheet = existingPackage.Workbook.Worksheets.Add("Inferred Data");
-                                existingPackage.Save(); // Save the package after adding the sheet
+                                // Assuming the "Description" and "Part Number" columns are in the first row
+                                var headerRow = stockWorksheet.Cells["1:1"];
+
+                                int descriptionColumnIndex = -1; // Initialize to an invalid index
+                                int partNumberColumnIndex = -1;  // Initialize to an invalid index
+
+                                // Find the columns containing "Description" and "Part Number" headers
+                                foreach (var cell in headerRow)
+                                {
+                                    if (cell.Text == "Description")
+                                    {
+                                        descriptionColumnIndex = cell.Start.Column;
+                                    }
+                                    else if (cell.Text == "Part No")
+                                    {
+                                        partNumberColumnIndex = cell.Start.Column;
+                                    }
+
+                                    // If both columns are found, exit the loop
+                                    if (descriptionColumnIndex != -1 && partNumberColumnIndex != -1)
+                                    {
+                                        break;
+                                    }
+                                }
+
+                                // Check if both columns were found
+                                if (descriptionColumnIndex != -1 && partNumberColumnIndex != -1)
+                                {
+                                    // Try to find the "Inferred Data" sheet or create it if it doesn't exist
+                                    var inferredDataWorksheet = existingPackage.Workbook.Worksheets.FirstOrDefault(sheet => sheet.Name == "Inferred Data");
+                                    if (inferredDataWorksheet == null)
+                                    {
+                                        inferredDataWorksheet = existingPackage.Workbook.Worksheets.Add("Inferred Data");
+                                        inferredDataWorksheet.Cells[1, 1].Value = "Part No";
+                                        inferredDataWorksheet.Cells[1, 2].Value = "Description";
+                                    }
+
+                                    // Loop through rows in the "Customer BOM Information" sheet
+                                    for (int row = 2; row <= existingWorksheet.Dimension.End.Row; row++)
+                                    {
+                                        // Get the value in the "Description" column for the current row
+                                        string descriptionValue = existingWorksheet.Cells[row, descriptionColumnIndex].Text;
+
+                                        // Search for a match in the "Stock" sheet's "Description" column
+                                        var matchingCell = stockWorksheet.Cells[2, descriptionColumnIndex, stockWorksheet.Dimension.End.Row, descriptionColumnIndex].FirstOrDefault(cell => cell.Text == descriptionValue);
+
+                                        // If a match is found, write the "Part Number" value to the "Inferred Data" sheet
+                                        if (matchingCell != null)
+                                        {
+                                            // Get the "Part Number" value from the corresponding row in "Stock" sheet
+                                            string partNumberValue = stockWorksheet.Cells[matchingCell.Start.Row, partNumberColumnIndex].Text;
+
+                                            // Write the matched "Part Number" and "Description" values to the "Inferred Data" sheet
+                                            inferredDataWorksheet.Cells[row, 1].Value = partNumberValue;
+                                            inferredDataWorksheet.Cells[row, 2].Value = descriptionValue;
+                                        }
+                                    }
+
+                                    // Save the existing Excel file with the added "Inferred Data" sheet
+                                    existingPackage.Save();
+                                }
+                                else
+                                {
+                                    MessageBox.Show("Could not find 'Description' and 'Part Number' columns in the 'Stock' sheet.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                }
+
                             }
-
                         }
-
-                        MessageBox.Show("Data processing and appending completed successfully.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                 }
                 catch (IOException ex)
@@ -207,7 +268,5 @@ namespace Customer___Barric_Bom_Convertor
                 }
             }
         }
-
-
     }
 }
